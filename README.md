@@ -3,7 +3,7 @@
 
 ## Installation
 
-1. Clone the repository to your local machine:
+1. Clone the repository OR download the zip to your local machine:
     ```sh
     git clone https://github.com/hjkellyh/JiraAce.git
     cd JiraAce
