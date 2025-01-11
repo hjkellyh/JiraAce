@@ -836,7 +836,9 @@ function addHoverEvent() {
             // Remove existing hover event listeners
             link = removeEventListeners(link, 'mouseover');
             // Add new hover event listener
-            link.addEventListener('mouseover', () => {
+            link.addEventListener('mouseover', (e) => {
+                e.preventDefault();
+                link.title = "";
                 // Define the hover action here
                 console.log('Hovered over the link:', link.textContent);
                 const issueKey = link.href.split('/').pop();
