@@ -820,9 +820,7 @@ window.addEventListener('load', () => {
         debouncedDisplayKey();
     }, 3000);
 });
-function testabc(){
-    
-}
+
 // 初始检查
 console.log('初始化检查...');
 setTimeout(() => {
@@ -830,3 +828,103 @@ setTimeout(() => {
     debouncedDisplayKey();
 }, 3000);
   
+// Add Jira hover function
+function addHoverEvent() {
+    let links = document.querySelectorAll('a[href^="https://ehealthinsurance.atlassian.net/browse"][data-testid="link-with-safety"]');
+    links.forEach(function(link) {
+        if (link && link.textContent) {
+            // Remove existing hover event listeners
+            link = removeEventListeners(link, 'mouseover');
+            // Add new hover event listener
+            link.addEventListener('mouseover', () => {
+                // Define the hover action here
+                console.log('Hovered over the link:', link.textContent);
+                const issueKey = link.href.split('/').pop();
+                fetchJiraInfo(issueKey).then(data => {
+                    console.log('Jira Description:', data.description);
+                    showTooltip(link, data.title, data.description, data.status);
+                }).catch(error => {
+                    console.error('Error fetching Jira description:', error);
+                });
+            });
+            link.addEventListener('mouseout', () => {
+                hideTooltip();
+            });
+        }
+    });
+}
+// Remove existing event listeners
+function removeEventListeners(element, eventType) {
+    const newElement = element.cloneNode(true);
+    element.parentNode.replaceChild(newElement, element);
+    return newElement;
+}
+// Fetch Jira issue info
+async function fetchJiraInfo(issueKey) {
+    const { jiraEmail, jiraApiToken } = await new Promise((resolve) => {
+        chrome.storage.sync.get(['jiraEmail', 'jiraApiToken'], resolve);
+    });
+
+    if (!jiraEmail || !jiraApiToken) {
+        alert('Jira email or API token is missing. Please configure them in the options page.');
+        chrome.runtime.sendMessage({ action: 'openOptionsPage' });
+        throw new Error('Jira email or API token is missing');
+    }
+
+    const response = await fetch(`https://ehealthinsurance.atlassian.net/rest/api/2/issue/${issueKey}`, {
+        headers: {
+            'Authorization': 'Basic ' + btoa(`${jiraEmail}:${jiraApiToken}`),
+            'Accept': 'application/json'
+        }
+    });
+    if (!response.ok) {
+        throw new Error('Network response was not ok');
+    }
+    const data = await response.json();
+    return {
+        title: data.fields.summary,
+        status: data.fields.status.name,
+        description: data.fields.description.length > 1000 ? data.fields.description.substring(0, 1000) + '...' : data.fields.description
+    };
+}
+
+// Show tooltip
+function showTooltip(link, title, description, status) {
+    let tooltip = document.getElementById('jira-tooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'jira-tooltip';
+        tooltip.style.position = 'absolute';
+        tooltip.style.backgroundColor = '#fff';
+        tooltip.style.border = '1px solid #ccc';
+        tooltip.style.padding = '10px';
+        tooltip.style.boxShadow = '0 0 10px rgba(0,0,0,0.1)';
+        tooltip.style.zIndex = '1000';
+        document.body.appendChild(tooltip);
+        
+        // Add event listeners to the tooltip
+        tooltip.addEventListener('mouseover', () => {
+            tooltip.style.display = 'block';
+        });
+        tooltip.addEventListener('mouseout', () => {
+            hideTooltip();
+        });
+    }
+
+    tooltip.innerHTML = `<strong>Title: ${title}</strong><br><strong>Status: ${status}</strong><br>${description}`;
+    const rect = link.getBoundingClientRect();
+    tooltip.style.top = `${rect.bottom + window.scrollY}px`;
+    tooltip.style.left = `${rect.left + window.scrollX}px`;
+    tooltip.style.display = 'block';
+}
+
+// Hide tooltip
+function hideTooltip() {
+    const tooltip = document.getElementById('jira-tooltip');
+    if (tooltip) {
+        tooltip.style.display = 'none';
+    }
+}
+
+// Add hover event after 1 second
+window.onload = debounce(addHoverEvent, 1000);
