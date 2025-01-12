@@ -843,7 +843,7 @@ function addHoverEvent() {
                 console.log('Hovered over the link:', link.textContent);
                 const issueKey = link.href.split('/').pop();
                 fetchJiraInfo(issueKey).then(data => {
-                    console.log('Jira Description:', data.description);
+                    // console.log('Jira Description:', data.description);
                     showTooltip(link, data.title, data.description, data.status);
                 }).catch(error => {
                     console.error('Error fetching Jira description:', error);
@@ -861,8 +861,36 @@ function removeEventListeners(element, eventType) {
     element.parentNode.replaceChild(newElement, element);
     return newElement;
 }
+
+// Set a cookie
+function setCookie(name, value, days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    const expires = "expires=" + date.toUTCString();
+    document.cookie = name + "=" + encodeURIComponent(value) + ";" + expires + ";path=/";
+}
+
+// Get a cookie
+function getCookie(name) {
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+    }
+    return null;
+}
+
 // Fetch Jira issue info
 async function fetchJiraInfo(issueKey) {
+    // Check if the info is already in the cookie
+    const cachedData = getCookie(issueKey);
+    if (cachedData) {
+        console.log('Fetched Jira info from cookie:', cachedData);
+        return JSON.parse(cachedData);
+    }
+
     const { jiraEmail, jiraApiToken } = await new Promise((resolve) => {
         chrome.storage.sync.get(['jiraEmail', 'jiraApiToken'], resolve);
     });
@@ -883,11 +911,16 @@ async function fetchJiraInfo(issueKey) {
         throw new Error('Network response was not ok');
     }
     const data = await response.json();
-    return {
+    const issueInfo = {
         title: data.fields.summary,
         status: data.fields.status.name,
         description: data.fields.description.length > 1000 ? data.fields.description.substring(0, 1000) + '...' : data.fields.description
     };
+    console.log('Fetched Jira info:', issueInfo);
+    // Save the fetched info into a cookie
+    setCookie(issueKey, JSON.stringify(issueInfo), 1); // Cookie expires in 1 day
+
+    return issueInfo;
 }
 
 // Show tooltip
