@@ -24,14 +24,6 @@ function waitForElement(selector, maxAttempts = 10) {
     });
 }
 
-// 检查是否是Jira issue页面
-function isJiraIssuePage() {
-    const isJiraUrl = window.location.href.includes('/browse/');
-    const hasTitle = !!document.querySelector('h1[data-test-id="issue.views.issue-base.foundation.summary.heading"]');
-    console.log('URL检查:', isJiraUrl, '标题检查:', hasTitle, 'URL:', window.location.href);
-    return isJiraUrl;  // 暂时只检查URL
-}
-
 // 创建警告元素的通用
 function createWarningElement(text, fieldId) {
     const warningElement = document.createElement('div');
@@ -189,8 +181,6 @@ function createWarningsContainer() {
 // 修改检查函数
 async function checkEpicLink() {
     try {
-        console.log('开始检查...');
-        
         // 先检查URL
         if (!window.location.href.includes('/browse/')) {
             console.log('不是Jira ticket页面，跳过检查');
@@ -227,33 +217,27 @@ async function checkEpicLink() {
         const typesNeedingStoryPoints = ['Technical task', 'Improvement', 'User Story', 'Story'];
         const needsStoryPoints = typesNeedingStoryPoints.includes(ticketType);
         
-        // 获取所有字段列表项
-        const fields = document.querySelectorAll('li.item');
-        console.log('找到字段数量:', fields.length);
+        // 点击加载more fields
+        const moreFieldsElement = document.querySelector('summary[data-testid="issue-view-layout-group.common.ui.collapsible-group-factory.secondary-context-items"]');
+        if (moreFieldsElement) {
+            moreFieldsElement.click();
+        } else {
+            console.error("moreFieldsElement not found");
+        }
         
         // 查找Epic Link字段
         let epicLinkField = null;
-        fields.forEach(field => {
-            const label = field.querySelector('strong.name');
-            if (label && label.textContent.trim() === 'Epic Link') {
-                epicLinkField = field;
-            }
-        });
-
-        if(fields.length == 0){
-            // Select the <div> element using its class and data attributes
-            const parentIssueElement = document.querySelector('div[data-testid="issue-field-parent.ui.read-view-container"]');
-            // Check if the element exists
-            if (parentIssueElement) {                
-                if (parentIssueElement.querySelector('span[data-testid="issue-field-parent.ui.view-read-view-empty-value"]')) {
-                    console.log('The parent issue is "None".');
-                } else {
-                    epicLinkField = parentIssueElement.querySelector('a[data-testid="issue-field-parent.ui.view-link"]');
-                    console.log('The parent issue is ' + parentIssueElement.querySelector('a[data-testid="issue-field-parent.ui.view-link"]').textContent.trim());
-                }
+        const parentIssueElement = document.querySelector('div[data-testid="issue-field-parent.ui.read-view-container"]');
+        // Check if the element exists
+        if (parentIssueElement) {                
+            if (parentIssueElement.querySelector('span[data-testid="issue-field-parent.ui.view-read-view-empty-value"]')) {
+                console.log('The parent issue is "None".');
             } else {
-                console.log('The specified <div> element does not exist.');
+                epicLinkField = parentIssueElement.querySelector('a[data-testid="issue-field-parent.ui.view-link"]');
+                console.log('The parent issue is ' + parentIssueElement.querySelector('a[data-testid="issue-field-parent.ui.view-link"]').textContent.trim());
             }
+        } else {
+            console.log('The div[data-testid="issue-field-parent.ui.read-view-container"] element does not exist.');
         }
         
         // 只在特定类型的ticket下才检查Story Points字段
@@ -961,5 +945,5 @@ function hideTooltip() {
     }
 }
 
-// Add hover event after 1 second
+// Add hover event after window reload after 1 second
 window.onload = debounce(addHoverEvent, 1000);

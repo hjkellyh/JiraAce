@@ -9,16 +9,17 @@
     "storage",
     "tabs"
   ],
-  "host_permissions": ["https://jira.ringcentral.com/*", "https://ehealthinsurance.atlassian.net/*"],
+  "host_permissions": ["https://ehealthinsurance.atlassian.net/*"],
   "content_scripts": [
     {
-      "matches": ["https://jira.ringcentral.com/*", "https://ehealthinsurance.atlassian.net/*"],
+      "matches": ["https://ehealthinsurance.atlassian.net/*"],
       "js": ["content.js"],
       "run_at": "document_end"
     }
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "options_page": "options.html",
   "icons": {
