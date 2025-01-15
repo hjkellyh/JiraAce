@@ -149,6 +149,12 @@ function createWarningElement(text, fieldId) {
             } else if (clickedElement.textContent === "NO STORY POINT") {
                 console.log('Clicked on the "NO STORY POINT" span.');
                 targetDiv = document.querySelector('span[data-testid="issue-field-classic-story-point.ui.inline-view-field"]');
+            } else if (clickedElement.textContent === "WORKING YEAR INCORRECT") {
+                console.log('Clicked on the "WORKING YEAR INCORRECT" span.');
+                targetDiv = document.querySelector('div[data-testid="issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container"] span[data-testid="issue.views.common.tag.tag-item"]');
+            } else if (clickedElement.textContent === "WORKING YEAR MISSING") {
+                console.log('Clicked on the "WORKING YEAR MISSING" span.');
+                targetDiv = document.querySelector('div[data-testid="issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container"] span');
             }
             // 检查目标元素是否存在
             if (targetDiv) {
@@ -312,6 +318,34 @@ async function checkEpicLink() {
                 }
             }
 
+            // Call the function to check the working year
+            let workingYearResult = await checkWorkingYear();
+            // 检查工作年份是否匹配
+            if (workingYearResult === 'MISMATCH') {
+                if (!document.getElementById('working-year-incorrect')) {
+                    const yearMismatchWarning = createWarningElement('WORKING YEAR INCORRECT', 'issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container');
+                    warningsContainer.appendChild(yearMismatchWarning);
+                }
+            } else {
+                const existingYearWarning = document.getElementById('working-year-incorrect');
+                if (existingYearWarning) {
+                    existingYearWarning.remove();
+                }
+            }
+
+            // 检查工作年份是否缺失
+            if (workingYearResult === 'MISSING') {
+                if (!document.getElementById('working-year-missing')) {
+                    const yearMissingWarning = createWarningElement('WORKING YEAR MISSING', 'issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container');
+                    warningsContainer.appendChild(yearMissingWarning);
+                }
+            } else {
+                const existingMissingWarning = document.getElementById('working-year-missing');
+                if (existingMissingWarning) {
+                    existingMissingWarning.remove();
+                }
+            }
+
             // 如果没有警告，移除容器
             if (!warningsContainer.hasChildNodes()) {
                 warningsContainer.remove();
@@ -319,6 +353,42 @@ async function checkEpicLink() {
         }
     } catch (error) {
         console.log('检查过程中出错:', error);
+    }
+}
+
+// Function to check if the working year matches the create date year
+function checkWorkingYear() {
+    if (window.location.href.includes("/browse/CAPI-")) {
+        // Retrieve the create date field
+        const createDateField = document.querySelector('div[data-testid="created-date.ui.read.meta-date"] span[role="presentation"]');
+        // Retrieve all working year fields
+        const workingYearFields = document.querySelectorAll('div[data-testid="issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container"] span[data-testid="issue.views.common.tag.tag-item"]');
+        console.log('createDateField:', createDateField)
+        console.log('workingYearFields:', workingYearFields)
+
+        if (createDateField && workingYearFields.length > 0) {
+            let createDateText = createDateField.textContent.trim();
+            console.log('createDateText:',createDateText)
+
+            // Manually parse the year from the create date text, if not contains year, use current year
+            const createYearMatch = createDateText.match(/\b\d{4}\b/);
+            const createYear = createYearMatch ? createYearMatch[0] : new Date().getFullYear().toString();
+            console.log('createYear:', createYear);
+
+            const workingYears = Array.from(workingYearFields).map(field => field.textContent.trim());
+            console.log('workingYears:', workingYears);
+
+            if (workingYears.includes(createYear)) {
+                console.log('The working year matches the create date year.');
+                return 'MATCH';
+            } else {    
+                console.log(`The working year (${workingYears}) does not match the create date year (${createYear}).`);
+                return 'MISMATCH';
+            }
+        } else {
+            console.log('Create date or working year field not found.');
+            return 'MISSING';
+        }
     }
 }
 
