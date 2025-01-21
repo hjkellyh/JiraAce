@@ -936,6 +936,38 @@ function getCookie(name) {
     return null;
 }
 
+// Function to send a message to background.js to derive a key
+function deriveKeyInBackground(passphrase) {
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+            { action: 'deriveKey', passphrase },
+            (response) => {
+                if (response.error) {
+                    reject(response.error);
+                } else {
+                    resolve(response.key);
+                }
+            }
+        );
+    });
+}
+
+// Function to send a message to background.js to decrypt data
+function decryptDataInBackground(key, encryptedData) {
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+            { action: 'decrypt', key, encryptedData },
+            (response) => {
+                if (response.error) {
+                    reject(response.error);
+                } else {
+                    resolve(response.decryptedData);
+                }
+            }
+        );
+    });
+}
+
 // Fetch Jira issue info
 async function fetchJiraInfo(issueKey) {
     // Check if the info is already in the cookie
@@ -955,9 +987,36 @@ async function fetchJiraInfo(issueKey) {
         throw new Error('Jira email or API token is missing');
     }
 
+    // Get the passphrase from chrome.storage.local
+    const { passphrase } = await new Promise((resolve) => {
+        chrome.storage.local.get(['passphrase'], resolve);
+    });
+
+    if (!passphrase) {
+        throw new Error('Passphrase is missing');
+    }
+
+    // Derive the cryptographic key from the passphrase
+    const cryptoKey = await deriveKeyInBackground(passphrase);
+    // console.log('Derived crypto key:', cryptoKey);
+
+    // Decrypt the Jira email and API token using background.js
+    let decryptedEmail, decryptedApiToken;
+    try{
+        decryptedEmail = await decryptDataInBackground(cryptoKey, jiraEmail);
+        decryptedApiToken = await decryptDataInBackground(cryptoKey, jiraApiToken);
+    } catch (error) {
+        console.error('Error decrypting Jira email or API token:', error);
+        chrome.storage.sync.remove(['jiraEmail', 'jiraApiToken'], () => {
+            alert('The encryption key has been updated. Please re-enter your Jira email and Jira API token.');
+            chrome.runtime.sendMessage({ action: 'openOptionsPage' });
+            throw new Error('Jira email or API token decryption failed');
+        });
+    }
+
     const response = await fetch(`https://ehealthinsurance.atlassian.net/rest/api/2/issue/${issueKey}`, {
         headers: {
-            'Authorization': 'Basic ' + btoa(`${jiraEmail}:${jiraApiToken}`),
+            'Authorization': 'Basic ' + btoa(`${decryptedEmail}:${decryptedApiToken}`),
             'Accept': 'application/json'
         }
     });
