@@ -148,7 +148,7 @@ function createWarningElement(text, fieldId) {
                 targetDiv = document.querySelector('span[data-testid="issue-field-parent.ui.view-read-view-empty-value"]');
             } else if (clickedElement.textContent === "NO STORY POINT") {
                 console.log('Clicked on the "NO STORY POINT" span.');
-                targetDiv = document.querySelector('span[data-testid="issue-field-classic-story-point.ui.inline-view-field"]');
+                targetDiv = document.querySelector('span[data-testid*="issue-field"][data-testid*="story-point"]');
             } else if (clickedElement.textContent === "WORKING YEAR INCORRECT") {
                 console.log('Clicked on the "WORKING YEAR INCORRECT" span.');
                 targetDiv = document.querySelector('div[data-testid="issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container"] span[data-testid="issue.views.common.tag.tag-item"]');
@@ -249,7 +249,7 @@ async function checkEpicLink() {
         // 只在特定类型的ticket下才检查Story Points字段
         let storyPointsField = null;
         if(needsStoryPoints){
-            storyPointsField = document.getElementById('rowForcustomfield_10422') ? document.getElementById('rowForcustomfield_10422') : document.querySelector('span[data-testid="issue-field-classic-story-point.ui.inline-view-field"]');
+            storyPointsField = document.getElementById('rowForcustomfield_10422') ? document.getElementById('rowForcustomfield_10422') : document.querySelector('span[data-testid*="issue-field"][data-testid*="story-point"]');
             console.log('Story Points字段:', storyPointsField);
         }
         
