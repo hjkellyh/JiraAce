@@ -188,7 +188,7 @@ function createWarningsContainer() {
 async function checkEpicLink() {
     try {
         // 先检查URL
-        if (!window.location.href.includes('/browse/')) {
+        if (!window.location.href.includes('/browse/') && !window.location.href.includes('/issues/')) {
             console.log('不是Jira ticket页面，跳过检查');
             return;
         }
@@ -199,13 +199,12 @@ async function checkEpicLink() {
         await new Promise(resolve => setTimeout(resolve, 3000));
         
         // 获取ticket类型
-        const typeElement = document.getElementById('type-val');
         const typeImgElement = document.querySelector('img[src*="issuetype/avatar"]');
-        const ticketType = typeElement ? typeElement.textContent.trim() : typeImgElement ? typeImgElement.alt : 'Element not found';
+        const ticketType =  typeImgElement ? typeImgElement.alt : 'Element not found';
         console.log('Ticket类型:', ticketType);
         
         // 定义需要检查的ticket类型
-        const typesNeedingCheck = ['Technical task', 'Improvement', 'User Story', 'QA Task', 'Story'];
+        const typesNeedingCheck = ['Story', 'Security'];
         const needsCheck = typesNeedingCheck.includes(ticketType);
         
         // 如果不是需要检查的类型，直接返回
@@ -220,7 +219,7 @@ async function checkEpicLink() {
         }
         
         // 定义需要Story Points的ticket类型（不包括QA Task）
-        const typesNeedingStoryPoints = ['Technical task', 'Improvement', 'User Story', 'Story'];
+        const typesNeedingStoryPoints = ['Story', 'Security'];
         const needsStoryPoints = typesNeedingStoryPoints.includes(ticketType);
         
         // 点击加载more fields
@@ -976,15 +975,19 @@ async function fetchJiraInfo(issueKey) {
         console.log('Fetched Jira info from cookie:', cachedData);
         return JSON.parse(cachedData);
     }
-
-    const { jiraEmail, jiraApiToken } = await new Promise((resolve) => {
-        chrome.storage.sync.get(['jiraEmail', 'jiraApiToken'], resolve);
-    });
-
-    if (!jiraEmail || !jiraApiToken) {
+    let jiraEmail, jiraApiToken;
+    try {
+        ({ jiraEmail, jiraApiToken } = await new Promise((resolve) => {
+            chrome.storage.sync.get(['jiraEmail', 'jiraApiToken'], resolve);
+        }));
+        if (!jiraEmail || !jiraApiToken) {
+            throw new Error('Jira email or API token is missing');
+        }
+    } catch (error){
+        console.log('jiraEmail in storage:' + jiraEmail + ', jiraApiToken in storage:' + jiraApiToken)
         alert('Jira email or API token is missing. Please configure them in the options page.');
         chrome.runtime.sendMessage({ action: 'openOptionsPage' });
-        throw new Error('Jira email or API token is missing');
+        return null;
     }
 
     // Get the passphrase from chrome.storage.local
@@ -1002,7 +1005,7 @@ async function fetchJiraInfo(issueKey) {
 
     // Decrypt the Jira email and API token using background.js
     let decryptedEmail, decryptedApiToken;
-    try{
+    try {
         decryptedEmail = await decryptDataInBackground(cryptoKey, jiraEmail);
         decryptedApiToken = await decryptDataInBackground(cryptoKey, jiraApiToken);
     } catch (error) {
