@@ -855,31 +855,98 @@ setTimeout(() => {
   
 // Add Jira hover function
 function addHoverEvent() {
-    let links = document.querySelectorAll('a[href^="https://ehealthinsurance.atlassian.net/browse"][data-testid="link-with-safety"]');
+    const links = document.querySelectorAll('a[href^="https://ehealthinsurance.atlassian.net/browse"][data-testid="link-with-safety"]');
+    
     links.forEach(function(link) {
-        if (link && link.textContent) {
-            // Remove existing hover event listeners
-            link = removeEventListeners(link, 'mouseover');
-            // Add new hover event listener
-            link.addEventListener('mouseover', (e) => {
-                e.preventDefault();
-                link.title = "";
-                // Define the hover action here
-                console.log('Hovered over the link:', link.textContent);
-                const issueKey = link.href.split('/').pop();
-                fetchJiraInfo(issueKey).then(data => {
-                    // console.log('Jira Description:', data.description);
-                    showTooltip(link, data.title, data.description, data.status);
-                }).catch(error => {
-                    console.error('Error fetching Jira description:', error);
-                });
-            });
-            link.addEventListener('mouseout', () => {
-                hideTooltip();
-            });
-        }
+        if (!link || !link.textContent) return;
+        
+        // Check if the link already has our custom attribute
+        if (link.getAttribute('data-jira-hover-attached')) return;
+        
+        // Mark this link as processed
+        link.setAttribute('data-jira-hover-attached', 'true');
+        
+        // Remove existing hover event listeners
+        const newLink = removeEventListeners(link, 'mouseover');
+        
+        // Add new hover event listeners
+        newLink.addEventListener('mouseover', handleHover);
+        newLink.addEventListener('mouseout', handleMouseOut);
     });
 }
+
+// Handle hover event
+function handleHover(e) {
+    e.preventDefault();
+    const link = e.currentTarget;
+    link.title = "";
+    
+    try {
+        console.log('Hovered over the link:', link.textContent);
+        const issueKey = link.href.split('/').pop();
+        
+        fetchJiraInfo(issueKey)
+            .then(data => {
+                if (data) {
+                    showTooltip(link, data.title, data.description, data.status);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching Jira description:', error);
+                showTooltip(link, 'Error', 'Failed to fetch Jira information', 'Unknown');
+            });
+    } catch (error) {
+        console.error('Error in hover handler:', error);
+    }
+}
+
+// Handle mouse out event
+function handleMouseOut() {
+    hideTooltip();
+}
+
+// Create a mutation observer to watch for new links
+const observeDOM = () => {
+    const observer = new MutationObserver(debounce(() => {
+        addHoverEvent();
+    }, 500));
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    return observer;
+};
+
+// Initialize the hover functionality
+function initializeHover() {
+    console.log('Initializing hover functionality...');
+    
+    // Add initial hover events
+    addHoverEvent();
+    
+    // Start observing DOM changes
+    const observer = observeDOM();
+    
+    // Clean up function
+    return () => observer.disconnect();
+}
+
+// Call initialize on page load and after dynamic content changes
+document.addEventListener('DOMContentLoaded', initializeHover);
+window.addEventListener('load', initializeHover);
+
+// Also initialize when URL changes (for single-page applications)
+new MutationObserver(() => {
+    const url = location.href;
+    if (url !== lastUrl) {
+        lastUrl = url;
+        console.log('URL changed, reinitializing hover...');
+        setTimeout(initializeHover, 1000);
+    }
+}).observe(document, { subtree: true, childList: true });
+
 // Remove existing event listeners
 function removeEventListeners(element, eventType) {
     const newElement = element.cloneNode(true);
@@ -907,27 +974,11 @@ function getCookie(name) {
     return null;
 }
 
-// Function to send a message to background.js to derive a key
-function deriveKeyInBackground(passphrase) {
-    return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(
-            { action: 'deriveKey', passphrase },
-            (response) => {
-                if (response.error) {
-                    reject(response.error);
-                } else {
-                    resolve(response.key);
-                }
-            }
-        );
-    });
-}
-
 // Function to send a message to background.js to decrypt data
-function decryptDataInBackground(key, encryptedData) {
+function decryptDataInBackground(encryptedData) {
     return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage(
-            { action: 'decrypt', key, encryptedData },
+            { action: 'decrypt', encryptedData },
             (response) => {
                 if (response.error) {
                     reject(response.error);
@@ -950,44 +1001,31 @@ async function fetchJiraInfo(issueKey) {
     let jiraEmail, jiraApiToken;
     try {
         ({ jiraEmail, jiraApiToken } = await new Promise((resolve) => {
-            chrome.storage.sync.get(['jiraEmail', 'jiraApiToken'], resolve);
+            chrome.storage.local.get(['jiraEmail', 'jiraApiToken'], resolve);
         }));
         if (!jiraEmail || !jiraApiToken) {
             throw new Error('Jira email or API token is missing');
         }
-    } catch (error){
-        console.log('jiraEmail in storage:' + jiraEmail + ', jiraApiToken in storage:' + jiraApiToken)
+    } catch (error) {
+        console.log('jiraEmail in storage:' + jiraEmail + ', jiraApiToken in storage:' + jiraApiToken);
         alert('Jira email or API token is missing. Please configure them in the options page.');
         chrome.runtime.sendMessage({ action: 'openOptionsPage' });
         return null;
     }
 
-    // Get the passphrase from chrome.storage.local
-    const { passphrase } = await new Promise((resolve) => {
-        chrome.storage.local.get(['passphrase'], resolve);
-    });
-    // console.log('Passphrase:', passphrase);
-
-    if (!passphrase) {
-        throw new Error('Passphrase is missing');
-    }
-
-    // Derive the cryptographic key from the passphrase
-    const cryptoKey = await deriveKeyInBackground(passphrase);
-    // console.log('Derived crypto key:', cryptoKey);
-
     // Decrypt the Jira email and API token using background.js
     let decryptedEmail, decryptedApiToken;
     try {
-        decryptedEmail = await decryptDataInBackground(cryptoKey, jiraEmail);
-        decryptedApiToken = await decryptDataInBackground(cryptoKey, jiraApiToken);
+        decryptedEmail = await decryptDataInBackground(jiraEmail);
+        decryptedApiToken = await decryptDataInBackground(jiraApiToken);
     } catch (error) {
         console.error('Error decrypting Jira email or API token:', error);
-        chrome.storage.sync.remove(['jiraEmail', 'jiraApiToken'], () => {
+        // chrome.storage.local.remove(['jiraEmail', 'jiraApiToken'], () => {
             alert('The encryption key has been updated. Please re-enter your Jira email and Jira API token.');
             chrome.runtime.sendMessage({ action: 'openOptionsPage' });
-            throw new Error('Jira email or API token decryption failed');
-        });
+            // throw new Error('Jira email or API token decryption failed');
+            return null;
+        // });
     }
 
     const response = await fetch(`https://ehealthinsurance.atlassian.net/rest/api/2/issue/${issueKey}`, {
