@@ -111,61 +111,32 @@ function createWarningElement(text, fieldId) {
         console.log(`${text} clicked`);
         
         // 查找Edit按钮
-        const editButton = 
-            document.querySelector('#edit-issue') || 
-            document.querySelector('button[id="edit-issue"]') || 
-            document.querySelector('button[aria-label="Edit issue"]');
         
-        console.log('Found edit button:', editButton);
-        
-        if (editButton) {
-            console.log('Clicking edit button');
-            editButton.click();
-            
-            // 等待编辑界面加载完成并滚动到相应字段
-            try {
-                const field = await waitForElement(`#${fieldId}`, 20);
-                console.log(`${text} field found:`, field);
-                field.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                field.focus();
-                
-                // 如果是Epic Link字段，尝试打开下拉菜单
-                if (fieldId === 'customfield_11450-field') {
-                    const dropdownButton = field.querySelector('button[aria-haspopup="listbox"]');
-                    if (dropdownButton) {
-                        dropdownButton.click();
-                    }
-                }
-            } catch (error) {
-                console.error(`Error finding ${text} field:`, error);
-            }
+        // 获取点击的元素
+        const clickedElement = event.target;// 判断点击的元素是否是我们期望的 <span>
+        let targetDiv = null;
+        if (clickedElement.textContent === "NO EPIC LINK") {
+            console.log('Clicked on the "NO EPIC LINK" span.');
+            targetDiv = document.querySelector('span[data-testid="issue-field-parent.ui.view-read-view-empty-value"]');
+        } else if (clickedElement.textContent === "NO STORY POINT") {
+            console.log('Clicked on the "NO STORY POINT" span.');
+            targetDiv = document.querySelector('button[aria-label="Edit Story Points"]');
+        } else if (clickedElement.textContent === "WORKING YEAR INCORRECT") {
+            console.log('Clicked on the "WORKING YEAR INCORRECT" span.');
+            targetDiv = document.querySelector('div[data-testid="issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container"] span[data-testid="issue.views.common.tag.tag-item"]');
+        } else if (clickedElement.textContent === "WORKING YEAR MISSING") {
+            console.log('Clicked on the "WORKING YEAR MISSING" span.');
+            targetDiv = document.querySelector('div[data-testid="issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container"] span');
+        }
+        // 检查目标元素是否存在
+        if (targetDiv) {
+            // 滚动到目标元素
+            targetDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // 聚焦到目标元素
+            targetDiv.focus();
+            targetDiv.click();
         } else {
-            // 获取点击的元素
-            const clickedElement = event.target;// 判断点击的元素是否是我们期望的 <span>
-            let targetDiv = null;
-            if (clickedElement.textContent === "NO EPIC LINK") {
-                console.log('Clicked on the "NO EPIC LINK" span.');
-                targetDiv = document.querySelector('span[data-testid="issue-field-parent.ui.view-read-view-empty-value"]');
-            } else if (clickedElement.textContent === "NO STORY POINT") {
-                console.log('Clicked on the "NO STORY POINT" span.');
-                targetDiv = document.querySelector('span[data-testid*="issue-field"][data-testid*="story-point"]');
-            } else if (clickedElement.textContent === "WORKING YEAR INCORRECT") {
-                console.log('Clicked on the "WORKING YEAR INCORRECT" span.');
-                targetDiv = document.querySelector('div[data-testid="issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container"] span[data-testid="issue.views.common.tag.tag-item"]');
-            } else if (clickedElement.textContent === "WORKING YEAR MISSING") {
-                console.log('Clicked on the "WORKING YEAR MISSING" span.');
-                targetDiv = document.querySelector('div[data-testid="issue.views.field.select.common.select-inline-edit.customfield_11812.field-inline-edit-state-less--container"] span');
-            }
-            // 检查目标元素是否存在
-            if (targetDiv) {
-                // 滚动到目标元素
-                targetDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // 聚焦到目标元素
-                targetDiv.focus();
-                targetDiv.click();
-            } else {
-                console.log('目标 <div> 元素不存在。');
-            }
+            console.log('目标 <div> 元素不存在。');
         }
     });
 
@@ -226,6 +197,7 @@ async function checkEpicLink() {
         const moreFieldsElement = document.querySelector('summary[data-testid="issue-view-layout-group.common.ui.collapsible-group-factory.secondary-context-items"]');
         if (moreFieldsElement) {
             moreFieldsElement.click();
+            console.log('Clicked on the "More Fields" element.');
         } else {
             console.error("moreFieldsElement not found");
         }
@@ -248,7 +220,7 @@ async function checkEpicLink() {
         // 只在特定类型的ticket下才检查Story Points字段
         let storyPointsField = null;
         if(needsStoryPoints){
-            storyPointsField = document.getElementById('rowForcustomfield_10422') ? document.getElementById('rowForcustomfield_10422') : document.querySelector('span[data-testid*="issue-field"][data-testid*="story-point"]');
+            storyPointsField = document.querySelector('span[data-testid*="issue-field"][data-testid*="story-point"]');
             console.log('Story Points字段:', storyPointsField);
         }
         
@@ -994,6 +966,7 @@ async function fetchJiraInfo(issueKey) {
     const { passphrase } = await new Promise((resolve) => {
         chrome.storage.local.get(['passphrase'], resolve);
     });
+    // console.log('Passphrase:', passphrase);
 
     if (!passphrase) {
         throw new Error('Passphrase is missing');
