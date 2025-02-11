@@ -41,7 +41,7 @@ function createWarningElement(text, fieldId) {
         align-items: center;
         visibility: visible !important;
         position: relative;
-        z-index: 1000;
+        z-index: 100;
         width: fit-content;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -150,7 +150,9 @@ function createWarningsContainer() {
     container.style.cssText = `
         display: flex;
         gap: 8px;
-        margin-top: 4px;
+        margin: 0 0 0 8px;
+        position: relative;
+        z-index: 100;
     `;
     return container;
 }
@@ -232,7 +234,8 @@ async function checkEpicLink() {
             let warningsContainer = document.getElementById('warnings-container');
             if (!warningsContainer) {
                 warningsContainer = createWarningsContainer();
-                titleElement.parentNode.insertBefore(warningsContainer, titleElement.nextSibling);
+                // Insert container after the title element in the DOM hierarchy
+                titleElement.insertAdjacentElement('afterend', warningsContainer);
             }
 
             // 检查并显示Epic Link警告
@@ -900,9 +903,24 @@ function handleHover(e) {
     }
 }
 
-// Handle mouse out event
-function handleMouseOut() {
-    hideTooltip();
+// Hide tooltip
+function hideTooltip() {
+    const tooltip = document.getElementById('jira-tooltip');
+    if (tooltip) {
+        const isTooltipHovered = tooltip.matches(':hover');
+        const link = document.querySelector('a[data-jira-hover-attached="true"]:hover');
+        
+        if (!isTooltipHovered && !link) {
+            tooltip.style.display = 'none';
+        }
+    }
+}
+
+// Handle mouse out event for tooltip
+function handleMouseOut(e) {
+    tooltipTimeout = setTimeout(() => {
+        hideTooltip();
+    }, 300);
 }
 
 // Create a mutation observer to watch for new links
@@ -1050,42 +1068,232 @@ async function fetchJiraInfo(issueKey) {
     return issueInfo;
 }
 
+// Add variable to track tooltip timeout
+let tooltipTimeout;
+
 // Show tooltip
 function showTooltip(link, title, description, status) {
+    clearTimeout(tooltipTimeout); // Clear any existing timeout
     let tooltip = document.getElementById('jira-tooltip');
+    
     if (!tooltip) {
         tooltip = document.createElement('div');
         tooltip.id = 'jira-tooltip';
-        tooltip.style.position = 'absolute';
-        tooltip.style.backgroundColor = '#fff';
-        tooltip.style.border = '1px solid #ccc';
-        tooltip.style.padding = '10px';
-        tooltip.style.boxShadow = '0 0 10px rgba(0,0,0,0.1)';
-        tooltip.style.zIndex = '1000';
+        tooltip.style.cssText = `
+            position: absolute;
+            background-color: #FFFFFF;
+            border-radius: 3px;
+            box-shadow: 0 4px 8px -2px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
+            padding: 16px;
+            min-width: 300px;
+            max-width: 1000px;
+            width: auto;
+            z-index: 1000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+        `;
         document.body.appendChild(tooltip);
-        
-        // Add event listeners to the tooltip
-        tooltip.addEventListener('mouseover', () => {
-            tooltip.style.display = 'block';
-        });
-        tooltip.addEventListener('mouseout', () => {
-            hideTooltip();
-        });
     }
 
-    tooltip.innerHTML = `<strong>Title: ${title}</strong><br><strong>Status: ${status}</strong><br>${description}`;
+    // Create a container for the link and tooltip
+    const tooltipContainer = document.createElement('div');
+    tooltipContainer.style.cssText = `
+        display: inline-block;
+        position: relative;
+    `;
+
+    // Add event listeners for both link and tooltip
+    const showTooltipElement = () => {
+        clearTimeout(tooltipTimeout);
+        tooltip.style.display = 'block';
+    };
+
+    const hideTooltipElement = () => {
+        tooltipTimeout = setTimeout(() => {
+            const isTooltipHovered = tooltip.matches(':hover');
+            const isLinkHovered = link.matches(':hover');
+            if (!isTooltipHovered && !isLinkHovered) {
+                hideTooltip();
+            }
+        }, 300);
+    };
+
+    // Add event listeners to both the link and tooltip
+    link.addEventListener('mouseenter', showTooltipElement);
+    link.addEventListener('mouseleave', hideTooltipElement);
+    tooltip.addEventListener('mouseenter', showTooltipElement);
+    tooltip.addEventListener('mouseleave', hideTooltipElement);
+
+    // Get status color based on status
+    const statusColors = {
+        'Open': '#0052CC',
+        'In Progress': '#0052CC',
+        'Done': '#36B37E',
+        'Closed': '#36B37E',
+        'Resolved': '#36B37E',
+        'To Do': '#42526E',
+        'New': '#42526E',
+        'Default': '#42526E'
+    };
+    const statusColor = statusColors[status] || statusColors['Default'];
+
+    // Pre-process description before using marked
+    let descriptionHtml = '';
+    try {
+        // First process Atlassian specific markup
+        const preprocessedDescription = description
+            ?.replace(/h([1-6])\.\s+(.*?)(?:\n|$)/gm, '<h$1>$2</h$1>\n')  // Headers
+            ?.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')             // Bold
+            ?.replace(/\+([^+]+)\+/g, '<u>$1</u>')                        // Underline
+            ?.replace(/\{code\}([\s\S]*?)\{code\}/g, '<pre><code>$1</code></pre>') // Code blocks
+            ?.replace(/\{color:[^}]+\}(.*?)\{color\}/g, '<span style="color:$1">$2</span>') // Color
+            ?.replace(/\{quote\}([\s\S]*?)\{quote\}/g, '<blockquote>$1</blockquote>') // Quotes
+            // Lists
+            ?.replace(/^[ \t]*([*#-])\s+([^\n]*)(?:\n|$)/gm, (_, marker, text) => {
+                const tag = marker === '#' ? 'ol' : 'ul';
+                return `<${tag}><li>${text}</li></${tag}>\n`;
+            })
+            ?.replace(/\n{2,}/g, '\n')  // Replace multiple newlines with a single newline
+            ?.replace(/\n/g, '<br>')    // Convert remaining newlines to <br>
+            || 'No description available';
+
+        descriptionHtml = marked.parse(preprocessedDescription);
+    } catch (error) {
+        console.error('Error parsing description:', error);
+        descriptionHtml = description || 'No description available';
+    }
+
+    let issueKey = link.href.split('/').pop();
+
+    tooltip.innerHTML = `
+        <div class="tooltip-content" style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="tooltip-header" style="
+                border-bottom: 1px solid #DFE1E6;
+                padding-bottom: 12px;
+                margin-bottom: 4px;
+            ">
+                <div class="tooltip-title" style="
+                    color: #172B4D;
+                    font-size: 14px;
+                    font-weight: 600;
+                    margin-bottom: 8px;
+                    word-wrap: break-word;
+                    hyphens: auto;
+                ">${issueKey}: ${title}</div>
+                <div class="tooltip-status" style="
+                    display: inline-block;
+                    background-color: ${statusColor};
+                    color: white;
+                    padding: 2px 8px;
+                    border-radius: 3px;
+                    font-size: 12px;
+                    font-weight: 500;
+                ">${status}</div>
+            </div>
+            <div class="tooltip-description" style="
+                color: #42526E;
+                font-size: 13px;
+                line-height: 1.6;
+                overflow-wrap: break-word;
+                word-break: break-word;
+                hyphens: auto;
+                max-height: 400px;
+                overflow-y: auto;
+                padding-right: 8px;
+            ">${descriptionHtml}</div>
+        </div>
+    `;
+
+    // Add styles for Markdown content
+    const style = document.createElement('style');
+    style.textContent = `
+        .tooltip-description {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+        }
+        .tooltip-description p {
+            margin: 0 0 8px 0;
+        }
+        .tooltip-description p:last-child {
+            margin-bottom: 0;
+        }
+        .tooltip-description h1, 
+        .tooltip-description h2, 
+        .tooltip-description h3 {
+            margin: 16px 0 8px 0;
+            color: #172B4D;
+        }
+        .tooltip-description ul, 
+        .tooltip-description ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+        .tooltip-description li {
+            margin: 4px 0;
+        }
+        .tooltip-description code {
+            background: #F4F5F7;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .tooltip-description pre {
+            background: #F4F5F7;
+            padding: 8px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        .tooltip-description blockquote {
+            margin: 8px 0;
+            padding-left: 16px;
+            border-left: 2px solid #DFE1E6;
+            color: #6B778C;
+        }
+        .tooltip-description a {
+            color: #0052CC;
+            text-decoration: none;
+        }
+        .tooltip-description a:hover {
+            text-decoration: underline;
+        }
+        .tooltip-description img {
+            max-width: 100%;
+            height: auto;
+        }
+    `;
+    document.head.appendChild(style);
+
     const rect = link.getBoundingClientRect();
-    tooltip.style.top = `${rect.bottom + window.scrollY}px`;
-    tooltip.style.left = `${rect.left + window.scrollX}px`;
-    tooltip.style.display = 'block';
-}
+    const tooltipHeight = tooltip.offsetHeight;
+    const windowHeight = window.innerHeight;
+    const windowWidth = window.innerWidth;
 
-// Hide tooltip
-function hideTooltip() {
-    const tooltip = document.getElementById('jira-tooltip');
-    if (tooltip) {
-        tooltip.style.display = 'none';
+    // Calculate maximum width based on viewport and position
+    const maxTooltipWidth = Math.min(600, windowWidth - 40); // 40px for margins
+    tooltip.style.maxWidth = `${maxTooltipWidth}px`;
+
+    // Position tooltip above if it would overflow bottom
+    if (rect.bottom + tooltipHeight > windowHeight) {
+        tooltip.style.top = `${Math.max(8, rect.top - tooltipHeight - 8) + window.scrollY}px`;
+    } else {
+        tooltip.style.top = `${rect.bottom + 8 + window.scrollY}px`;
     }
+
+    // Calculate horizontal position
+    let leftPosition = rect.left + window.scrollX;
+    const tooltipWidth = tooltip.offsetWidth;
+    
+    // Adjust if tooltip would overflow right side
+    if (leftPosition + tooltipWidth > windowWidth) {
+        leftPosition = Math.max(20, windowWidth - tooltipWidth - 20);
+    }
+    
+    // Ensure tooltip doesn't overflow left side
+    leftPosition = Math.max(20, leftPosition);
+    
+    tooltip.style.left = `${leftPosition}px`;
+    tooltip.style.display = 'block';
 }
 
 // Add hover event after window reload after 1 second
