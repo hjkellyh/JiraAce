@@ -1141,24 +1141,24 @@ function showTooltip(link, title, description, status) {
     // Pre-process description before using marked
     let descriptionHtml = '';
     try {
-        // First process Atlassian specific markup
-        const preprocessedDescription = description
-            ?.replace(/h([1-6])\.\s+(.*?)(?:\n|$)/gm, '<h$1>$2</h$1>\n')  // Headers
-            ?.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')             // Bold
-            ?.replace(/\+([^+]+)\+/g, '<u>$1</u>')                        // Underline
-            ?.replace(/\{code\}([\s\S]*?)\{code\}/g, '<pre><code>$1</code></pre>') // Code blocks
-            ?.replace(/\{color:[^}]+\}(.*?)\{color\}/g, '<span style="color:$1">$2</span>') // Color
-            ?.replace(/\{quote\}([\s\S]*?)\{quote\}/g, '<blockquote>$1</blockquote>') // Quotes
-            // Lists
-            ?.replace(/^[ \t]*([*#-])\s+([^\n]*)(?:\n|$)/gm, (_, marker, text) => {
-                const tag = marker === '#' ? 'ol' : 'ul';
-                return `<${tag}><li>${text}</li></${tag}>\n`;
-            })
-            ?.replace(/\n{2,}/g, '\n')  // Replace multiple newlines with a single newline
-            ?.replace(/\n/g, '<br>')    // Convert remaining newlines to <br>
-            || 'No description available';
-
-        descriptionHtml = marked.parse(preprocessedDescription);
+        descriptionHtml = marked.parse(description)
+        ?.replace(/h([1-6])\.\s+(.*?)(?:\n|$)/gm, '<h$1>$2</h$1>\n')  // Headers
+        ?.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')             // Bold
+        ?.replace(/\+([^+]+)\+/g, '<u>$1</u>')                        // Underline
+        ?.replace(/\{code\}([\s\S]*?)\{code\}/g, '<pre><code>$1</code></pre>') // Code blocks
+        ?.replace(/\{color:[^}]+\}(.*?)\{color\}/g, '<span style="color:$1">$2</span>') // Color
+        ?.replace(/\{quote\}([\s\S]*?)\{quote\}/g, '<blockquote>$1</blockquote>') // Quotes
+        // Nested Lists
+        ?.replace(/^[ \t]*([*]{1,6}|#)\s+([^\n]*)(?:\n|$)/gm, (_, marker, text) => {
+            const isOrdered = marker.includes('#');
+            const level = isOrdered ? 1 : marker.length; // Get nesting level from number of asterisks
+            const tag = isOrdered ? 'ol' : 'ul';
+            const indent = level > 1 ? `margin-left: ${(level - 1) * 20}px;` : ''; // Indent based on level
+            return `<${tag}><li style="${indent}">${text}</li></${tag}>\n`;
+        })
+        ?.replace(/\n{2,}/g, '\n')  // Replace multiple newlines with a single newline
+        ?.replace(/\n/g, '<br>')    // Convert remaining newlines to <br>
+        || 'No description available';
     } catch (error) {
         console.error('Error parsing description:', error);
         descriptionHtml = description || 'No description available';
