@@ -19,13 +19,14 @@
 
 ## Usage
 
-The extension will automatically run on Jira pages matching the specified URLs in the  file:
+The extension will automatically run on the pages matching the specified URLs in the  file:
 - `https://ehealthinsurance.atlassian.net/*`
 
 ## Features
 
-- Displays warnings for missing Epic Link and Story Points on Jira issues.
+- Displays warnings for missing Epic Link, Story Points and Working Year on Jira issues.
 - Provides quick access to ticket information and allows copying ticket details.
+- Displays the tooltip to show the brief information of a Jira link.
 
 ## Development
 
