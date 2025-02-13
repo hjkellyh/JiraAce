@@ -20,7 +20,6 @@
 ## Usage
 
 The extension will automatically run on Jira pages matching the specified URLs in the  file:
-- `https://jira.ringcentral.com/*`
 - `https://ehealthinsurance.atlassian.net/*`
 
 ## Features
@@ -31,5 +30,5 @@ The extension will automatically run on Jira pages matching the specified URLs i
 ## Development
 
 To make changes to the extension, edit the source files and reload the extension in Chrome:
-1. Make your changes in the source files [content.js].
+1. Make your changes in the source files.
 2. Go to `chrome://extensions/` and click the "Reload" button for the JiraAce extension.
